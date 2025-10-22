@@ -12,7 +12,6 @@ class Ray;
 
 class Camera;
 
-#include "isect.h"
 #include "mat3.h"
 #include "vec2.h"
 #include "vec3.h"
@@ -110,14 +109,10 @@ public:
 
 // [Frisvad 2012, "Building an Orthonormal Basis from a 3D Unit Vector Without
 // Normalization"]
-[[nodiscard]] auto GetTangentBasisFrisvad(cpp2::impl::in<Vec3> TangentZ)
-    -> Mat3x3;
+[[nodiscard]] auto GetTangentBasisFrisvad(Vec3 const &tangentZ) -> Mat3x3;
 
 // generate a random vector in a hemisphere aligned to the input normal
 [[nodiscard]] auto RandomHemisphere(Vec3 const &normal, rng32 &rng) -> Vec3;
-
-// {fmt} output shim
-std::string format_as(const Vec3 &inst) { return inst.format(); }
 
 [[nodiscard]] auto Ray::origin() const & -> Vec3 { return m_origin; }
 
@@ -242,25 +237,24 @@ auto Camera::operator=(Camera &&that) noexcept -> Camera &
 
 Camera::Camera() {}
 
-[[nodiscard]] auto GetTangentBasisFrisvad(cpp2::impl::in<Vec3> TangentZ)
-    -> Mat3x3
+[[nodiscard]] auto GetTangentBasisFrisvad(Vec3 const &tangentZ) -> Mat3x3
 {
 
-  Vec3 TangentX{};
-  Vec3 TangentY{};
+  Vec3 tangentX{};
+  Vec3 tangentY{};
 
-  if ((cpp2::impl::cmp_less(TangentZ.z, -0.9999999))) {
-    TangentX = Vec3(0, -1, 0);
-    TangentY = Vec3(-1, 0, 0);
+  if ((cpp2::impl::cmp_less(tangentZ.z, -0.9999999))) {
+    tangentX = Vec3(0, -1, 0);
+    tangentY = Vec3(-1, 0, 0);
   } else {
-    auto A{1.0 / CPP2_ASSERT_NOT_ZERO(CPP2_TYPEOF(1.0), (1.0 + TangentZ.z))};
-    auto B{-TangentZ.x * TangentZ.y * A};
-    TangentX = Vec3(1.0 - TangentZ.x * TangentZ.x * A, B, -TangentZ.x);
-    TangentY = Vec3(cpp2::move(B),
-                    1.0 - TangentZ.y * TangentZ.y * cpp2::move(A), -TangentZ.y);
+    auto A{1.0 / CPP2_ASSERT_NOT_ZERO(CPP2_TYPEOF(1.0), (1.0 + tangentZ.z))};
+    auto B{-tangentZ.x * tangentZ.y * A};
+    tangentX = Vec3(1.0 - tangentZ.x * tangentZ.x * A, B, -tangentZ.x);
+    tangentY = Vec3(cpp2::move(B),
+                    1.0 - tangentZ.y * tangentZ.y * cpp2::move(A), -tangentZ.y);
   }
 
-  return Mat3x3(cpp2::move(TangentX), cpp2::move(TangentY), TangentZ);
+  return Mat3x3(cpp2::move(tangentX), cpp2::move(tangentY), tangentZ);
 }
 
 [[nodiscard]] auto RandomHemisphere(Vec3 const &normal, rng32 &rng) -> Vec3
@@ -270,7 +264,7 @@ Camera::Camera() {}
   auto randY{CPP2_UFCS(genFloat)(rng)};
 
   auto basis{GetTangentBasisFrisvad(normal)};
-  auto hemiUp{Vec3(0, 0, 1)};
+  auto constexpr hemiUp{Vec3(0, 0, 1)};
 
   auto uu{Vec3::cross(hemiUp, Vec3(1.0, 0.0, 0.0))};
   auto vv{Vec3::cross(uu, hemiUp)};
@@ -282,8 +276,7 @@ Camera::Camera() {}
   auto rz{std::sqrt(1.0 - cpp2::move(randY))};
 
   auto hemiDir{(cpp2::move(uu) * cpp2::move(rx)) +
-               (cpp2::move(vv) * cpp2::move(ry)) +
-               (cpp2::move(hemiUp) * cpp2::move(rz))};
+               (cpp2::move(vv) * cpp2::move(ry)) + (hemiUp * cpp2::move(rz))};
   auto basisDir{CPP2_UFCS(transform)(
       cpp2::move(basis), CPP2_UFCS(normalised)(cpp2::move(hemiDir)))};
 

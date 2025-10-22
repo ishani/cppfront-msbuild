@@ -9,19 +9,25 @@ OnScopeExit: <TCallback:type> type
 	private m_callOnExit: TCallback = ();
 }
 
+// simple timer for measuring execution speed of blocks of code; logs "X took Y" on scope exit
 ScopedTimer: type = {
-	TTimeClock : type == std::chrono::high_resolution_clock;
-	TTimePoint : type == std::chrono::time_point< TTimeClock >;
+	private TTimeClock : type == std::chrono::high_resolution_clock;
+	private TTimePoint : type == std::chrono::time_point< TTimeClock >;
 
 	operator=: (out this, context: std::string_view ) = { 
 		m_context = context; 
 	}
 
 	operator=: (move this) = {
-		duration: = std::chrono::duration_cast< std::chrono::seconds >( TTimeClock::now() - m_instant );
-		blog::app("{} took {}", m_context, duration);
+		timeAtEnd: = TTimeClock::now();
+
+		// is there a nicer way to get fractional seconds out of chrono?..
+		duration: = std::chrono::duration_cast< std::chrono::milliseconds >( timeAtEnd - m_timeAtStart );
+		durationTicks: = unchecked_narrow<double>( duration.count() );
+
+		blog::app("{} took {}s", m_context, durationTicks / 1000.0);
 	}
 
 	private m_context: std::string = ();
-	private m_instant: TTimePoint = TTimeClock::now();
+	private m_timeAtStart: TTimePoint = TTimeClock::now();
 }

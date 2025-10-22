@@ -16,11 +16,11 @@ namespace proc {
 [[nodiscard]] constexpr auto mod(cpp2::impl::in<double> a,
                                  cpp2::impl::in<double> b) -> double;
 
-[[nodiscard]] auto frac(cpp2::impl::in<double> val) -> double;
+[[nodiscard]] constexpr auto frac(cpp2::impl::in<double> val) -> double;
 
-[[nodiscard]] auto smoothstep(cpp2::impl::in<double> edge0,
-                              cpp2::impl::in<double> edge1,
-                              cpp2::impl::in<double> x) -> double;
+[[nodiscard]] constexpr auto smoothstep(cpp2::impl::in<double> edge0,
+                                        cpp2::impl::in<double> edge1,
+                                        cpp2::impl::in<double> x) -> double;
 
 [[nodiscard]] auto hash3(Vec2 const &p) -> Vec3;
 
@@ -30,6 +30,7 @@ namespace proc {
 [[nodiscard]] auto Checkerboard(Vec2 const &uv,
                                 cpp2::impl::in<double> checkSize) -> double;
 
+// by Inigo Quilez ( iquilezles.org )
 // https://www.shadertoy.com/view/Xd23Dh
 [[nodiscard]] auto Voronoise(Vec2 const &p, cpp2::impl::in<double> u,
                              cpp2::impl::in<double> v) -> double;
@@ -51,14 +52,14 @@ namespace proc {
   }
 }
 
-[[nodiscard]] auto frac(cpp2::impl::in<double> val) -> double
+[[nodiscard]] constexpr auto frac(cpp2::impl::in<double> val) -> double
 {
   return val - std::trunc(val);
 }
 
-[[nodiscard]] auto smoothstep(cpp2::impl::in<double> edge0,
-                              cpp2::impl::in<double> edge1,
-                              cpp2::impl::in<double> x) -> double
+[[nodiscard]] constexpr auto smoothstep(cpp2::impl::in<double> edge0,
+                                        cpp2::impl::in<double> edge1,
+                                        cpp2::impl::in<double> x) -> double
 {
   // scale, and clamp x to 0..1 range
   auto v{std::clamp((x - edge0) / CPP2_ASSERT_NOT_ZERO(CPP2_TYPEOF((x - edge0)),
@@ -118,7 +119,8 @@ namespace proc {
       a += Vec2(cpp2::move(o).z * w, cpp2::move(w));
     }
   }
-  if (a.y == 0.0) {
+
+  if (a.y == 0.0) { // avoid dbz
     return 0.0;
   }
   return std::clamp(a.x / CPP2_ASSERT_NOT_ZERO(CPP2_TYPEOF(a.x), a.y), 0.0,

@@ -1,7 +1,6 @@
 #include "vec3.h2"
 #include "vec2.h2"
 #include "mat3.h2"
-#include "isect.h2"
 
 #include "math/angle.h2"
 
@@ -17,7 +16,6 @@ Ray: @basic_value type = {
 		m_dir = dir;
 	}
 }
-
 
 Camera: @basic_value type = {
 
@@ -74,27 +72,26 @@ Camera: @basic_value type = {
 }
 
 
-
 // [Frisvad 2012, "Building an Orthonormal Basis from a 3D Unit Vector Without Normalization"]
-GetTangentBasisFrisvad: (TangentZ:Vec3) -> Mat3x3 = {
+GetTangentBasisFrisvad: ( in_ref tangentZ:Vec3 ) -> Mat3x3 = {
 
-	TangentX: Vec3 = ();
-	TangentY: Vec3 = ();
+	tangentX: Vec3 = ();
+	tangentY: Vec3 = ();
 
-	if (TangentZ.z < -0.9999999)
+	if (tangentZ.z < -0.9999999)
 	{
-		TangentX = Vec3(0, -1, 0);
-		TangentY = Vec3(-1, 0, 0);
+		tangentX = Vec3(0, -1, 0);
+		tangentY = Vec3(-1, 0, 0);
 	}
 	else
 	{
-		A: = 1.0 / (1.0 + TangentZ.z);
-		B: = -TangentZ.x * TangentZ.y * A;
-		TangentX = Vec3(1.0 - TangentZ.x * TangentZ.x * A, B, -TangentZ.x);
-		TangentY = Vec3(B, 1.0 - TangentZ.y * TangentZ.y * A, -TangentZ.y);
+		A: = 1.0 / (1.0 + tangentZ.z);
+		B: = -tangentZ.x * tangentZ.y * A;
+		tangentX = Vec3( 1.0 - tangentZ.x * tangentZ.x * A, B, -tangentZ.x );
+		tangentY = Vec3( B, 1.0 - tangentZ.y * tangentZ.y * A, -tangentZ.y );
 	}
 
-	return Mat3x3( TangentX, TangentY, TangentZ );
+	return Mat3x3( tangentX, tangentY, tangentZ );
 }
 
 // generate a random vector in a hemisphere aligned to the input normal
@@ -104,7 +101,7 @@ RandomHemisphere: ( in_ref normal: Vec3, inout rng: rng32) -> Vec3 = {
 	randY: = rng.genFloat();
 
 	basis: = GetTangentBasisFrisvad(normal);
-	hemiUp: = Vec3(0, 0, 1);
+	hemiUp: == Vec3(0, 0, 1);
 
 	uu: = Vec3::cross( hemiUp, Vec3(1.0, 0.0, 0.0) );
 	vv: = Vec3::cross( uu, hemiUp );
@@ -119,10 +116,4 @@ RandomHemisphere: ( in_ref normal: Vec3, inout rng: rng32) -> Vec3 = {
 	basisDir: = basis.transform( hemiDir.normalised() );
 
 	return basisDir;
-}
-
-
-// {fmt} output shim
-std::string format_as(const Vec3& inst) {
-  return inst.format();
 }

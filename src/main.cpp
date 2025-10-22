@@ -76,7 +76,7 @@ auto renderScan(cpp2::impl::in<cpp2::u16> y, RayScene const &scene,
                 cpp2::impl::in<IColourBufferPtr> image) -> void;
 
 // ---------------------------------------------------------------------------------------------------------------------
-[[nodiscard]] auto run(std::filesystem::path &&outputPath) -> int;
+[[nodiscard]] auto raytrace(std::filesystem::path &&outputPath) -> int;
 
 auto contractViolationHandler(char const *msg, std::source_location where)
     -> void
@@ -91,12 +91,15 @@ auto contractViolationHandler(char const *msg, std::source_location where)
 [[nodiscard]] auto main() -> int
 {
 
+  // plug in our custom error handlers
   CPP2_UFCS(set_handler)(cpp2::cpp2_default, &contractViolationHandler);
   CPP2_UFCS(set_handler)(cpp2::bounds_safety, &contractViolationHandler);
 
+  // configure win terminal for better logging
   blog::configureTerminal();
 
-  return run("result.tga");
+  // attack your CPU cores and barf out a picture why don't we
+  return raytrace("result.tga");
 }
 
 template <typename T, typename... Args>
@@ -195,6 +198,7 @@ auto renderScan(cpp2::impl::in<cpp2::u16> y, RayScene const &scene,
 
     for (auto const &pps : cpp2::range(0, perPixelSamples)) {
 
+      // undignified sampling window
       auto xDOff{-0.9 + (CPP2_UFCS(genGauss)(rng) * 1.8)};
       auto yDOff{-0.9 + (CPP2_UFCS(genGauss)(rng) * 1.8)};
       if (pps == 0) {
@@ -249,8 +253,8 @@ auto renderScan(cpp2::impl::in<cpp2::u16> y, RayScene const &scene,
         if (hit.prim == IntersectionPrim::Sphere) {
 
           auto repeats{4.0};
-          if (cpp2::impl::cmp_greater_eq(CPP2_UFCS(genFloat)(objRng), 0.5)) {
-            repeats += 2.0;
+          if (cpp2::impl::cmp_less_eq(CPP2_UFCS(genFloat)(objRng), 0.7)) {
+            repeats += 4.0;
           }
           auto checker{proc::Checkerboard(hit.uv, cpp2::move(repeats))};
           texture -= cpp2::move(checker) * 0.15;
@@ -278,6 +282,7 @@ auto renderScan(cpp2::impl::in<cpp2::u16> y, RayScene const &scene,
         auto diffuseIntensity{std::clamp(cpp2::move(NdotL), 0.0, 1.0) *
                               cpp2::move(diffuseI)};
 
+        // specular
         auto H{CPP2_UFCS(normalised)(
             (cpp2::move(lightDir) + CPP2_UFCS(dir)(cpp2::move(cameraRay))))};
         auto NdotH{Vec3::dot(hit.normal, cpp2::move(H))};
@@ -285,14 +290,16 @@ auto renderScan(cpp2::impl::in<cpp2::u16> y, RayScene const &scene,
             std::pow(std::clamp(cpp2::move(NdotH), 0.0, 1.0), 4.0) *
             cpp2::move(specularI)};
 
+        // smunch it together
         auto lighting{cpp2::move(ambientI) + cpp2::move(diffuseIntensity) +
                       cpp2::move(specularIntensity)};
         lighting *= cpp2::move(texture);
         lighting *= cpp2::move(occlusion);
 
+        // monochrome == art
         outColour.r += (lighting * 1.15);
-        outColour.g += (lighting * 1.06);
-        outColour.b += (cpp2::move(lighting) * 1.09);
+        outColour.g += (lighting * 1.14);
+        outColour.b += (cpp2::move(lighting) * 1.13);
 
         static_cast<void>(cpp2::move(objRng));
       }
@@ -302,9 +309,9 @@ auto renderScan(cpp2::impl::in<cpp2::u16> y, RayScene const &scene,
     // post-processing stage
 
     // add alternate-scan darkening/brightening
-    auto postprocess{1.0};
+    auto postprocess{1.1};
     if (y % 2 == 0) {
-      postprocess = 0.8;
+      postprocess = 0.75;
     }
 
     // add vignette
@@ -313,16 +320,18 @@ auto renderScan(cpp2::impl::in<cpp2::u16> y, RayScene const &scene,
     vig = std::pow(vig, 0.25);
     postprocess *= cpp2::move(vig);
 
+    // -----------------------------------------------------------------------------------------------------
+    // final out to buffer
+
     outColour.r *= perPixelDelta * postprocess;
     outColour.g *= perPixelDelta * postprocess;
     outColour.b *= perPixelDelta * cpp2::move(postprocess);
-
     CPP2_UFCS(set)((*cpp2::impl::assert_not_null(image)), x, y,
                    cpp2::move(outColour));
   }
 }
 
-[[nodiscard]] auto run(std::filesystem::path &&outputPath) -> int
+[[nodiscard]] auto raytrace(std::filesystem::path &&outputPath) -> int
 {
 
   blog::debug("WARNING! this is a debug build, it will be SLOW to render!");
@@ -331,6 +340,7 @@ auto renderScan(cpp2::impl::in<cpp2::u16> y, RayScene const &scene,
   auto framebuffer{
       CPP2_UFCS_TEMPLATE(cpp2_new<BufferRGB<900, 480>>)(cpp2::shared)};
 
+  // deterministic RNG for scene setup
   rng32 sceneRng{100};
 
   // cook up something to render
@@ -359,7 +369,7 @@ auto renderScan(cpp2::impl::in<cpp2::u16> y, RayScene const &scene,
 
   // multithread dispatch of each scanline using std::execution
   {
-    ScopedTimer renderTimer{"raytracing"};
+    ScopedTimer renderTimer{"rendering"};
 
     auto scanlinesToDo{
         CPP2_UFCS(getHeight)((*cpp2::impl::assert_not_null(framebuffer)))};
@@ -384,7 +394,7 @@ auto renderScan(cpp2::impl::in<cpp2::u16> y, RayScene const &scene,
 
           auto scansComplete{++*cpp2::impl::assert_not_null(_3)};
           if ((scansComplete % 20) == 0) {
-            blog::app(" > rendering : {:3}%",
+            blog::app(" -- tracing : {:3}%",
                       std::round(cpp2::unchecked_narrow<double>(
                                      cpp2::move(scansComplete)) *
                                  _4 * 100.0));

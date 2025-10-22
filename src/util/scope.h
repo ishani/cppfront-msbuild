@@ -37,11 +37,13 @@ public:
   auto operator=(OnScopeExit const &) -> void = delete;
 };
 
+// simple timer for measuring execution speed of blocks of code; logs "X took Y"
+// on scope exit
 class ScopedTimer {
-public:
+private:
   using TTimeClock = std::chrono::high_resolution_clock;
 
-public:
+private:
   using TTimePoint = std::chrono::time_point<TTimeClock>;
 
 public:
@@ -57,7 +59,7 @@ private:
   std::string m_context{};
 
 private:
-  TTimePoint m_instant{TTimeClock::now()};
+  TTimePoint m_timeAtStart{TTimeClock::now()};
 
 public:
   ScopedTimer(ScopedTimer const &) =
@@ -96,14 +98,23 @@ auto ScopedTimer::operator=(cpp2::impl::in<std::string_view> context)
     -> ScopedTimer &
 {
   m_context = context;
-  m_instant = TTimeClock::now();
+  m_timeAtStart = TTimeClock::now();
   return *this;
 }
 
 ScopedTimer::~ScopedTimer() noexcept
 {
-  auto duration{std::chrono::duration_cast<std::chrono::seconds>(
-      TTimeClock::now() - m_instant)};
-  blog::app("{} took {}", cpp2::move(*this).m_context, cpp2::move(duration));
+  auto timeAtEnd{TTimeClock::now()};
+
+  // is there a nicer way to get fractional seconds out of chrono?..
+  auto duration{std::chrono::duration_cast<std::chrono::milliseconds>(
+      cpp2::move(timeAtEnd) - m_timeAtStart)};
+  auto durationTicks{
+      cpp2::unchecked_narrow<double>(CPP2_UFCS(count)(cpp2::move(duration)))};
+
+  blog::app(
+      "{} took {}s", cpp2::move(*this).m_context,
+      cpp2::move(durationTicks) /
+          CPP2_ASSERT_NOT_ZERO(CPP2_TYPEOF(cpp2::move(durationTicks)), 1000.0));
 }
 #endif

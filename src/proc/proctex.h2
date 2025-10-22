@@ -1,6 +1,6 @@
 
 // glsl-style mod() that handles -ve values
-mod: (a: double, b: double) -> double == {
+mod: ( a: double, b: double ) -> double == {
 	if a >= 0 {
 		return std::fmod(a,b);
 	} else { 
@@ -13,11 +13,11 @@ mod: (a: double, b: double) -> double == {
 	}
 }
 
-frac: ( val:double ) -> double = {
+frac: ( val:double ) -> double == {
 	return val - std::trunc(val);
 }
 
-smoothstep: (edge0: double, edge1: double, x: double) -> double = {
+smoothstep: ( edge0: double, edge1: double, x: double ) -> double == {
 	// scale, and clamp x to 0..1 range
 	v: = std::clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
 
@@ -49,6 +49,7 @@ Checkerboard: ( in_ref uv:Vec2, checkSize: double ) -> double = {
 	return 0.0;
 }
 
+// by Inigo Quilez ( iquilezles.org )
 // https://www.shadertoy.com/view/Xd23Dh
 Voronoise: ( in_ref p:Vec2, u:double, v:double ) -> double = {
 	k: double = 1.0 + 63.0 * std::pow( 1.0-v, 6.0 );
@@ -69,7 +70,10 @@ Voronoise: ( in_ref p:Vec2, u:double, v:double ) -> double = {
 		a += Vec2( o.z*w, w );
 	}
 	}
-	if a.y == 0.0 { return 0.0; }
+
+	if a.y == 0.0 {	// avoid dbz
+		return 0.0;
+	}
 	return std::clamp( a.x / a.y, 0.0, 1.0 );
 }
 

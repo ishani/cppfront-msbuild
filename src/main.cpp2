@@ -25,12 +25,15 @@ contractViolationHandler: (copy msg: * const char, copy where: std::source_locat
 // ---------------------------------------------------------------------------------------------------------------------
 main: () -> int = {
 
+	// plug in our custom error handlers
 	cpp2::default.set_handler(contractViolationHandler&);
 	cpp2::bounds_safety.set_handler(contractViolationHandler&);
 
+	// configure win terminal for better logging
 	blog::configureTerminal();
 
-	return run("result.tga");
+	// attack your CPU cores and barf out a picture why don't we
+	return raytrace("result.tga");
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -112,7 +115,8 @@ renderScan: (y:u16, in_ref scene:RayScene, in_ref renderCamera: Camera, image: I
 		outColour: ColourF = ();
 
 		for 0 ..< perPixelSamples do (pps) {
-		
+
+			// undignified sampling window
 			xDOff: = -0.9 + ( rng.genGauss() * 1.8 );
 			yDOff: = -0.9 + ( rng.genGauss() * 1.8 );
 			if pps == 0 {
@@ -165,8 +169,8 @@ renderScan: (y:u16, in_ref scene:RayScene, in_ref renderCamera: Camera, image: I
 				if hit.prim == IntersectionPrim::Sphere {
 
 					repeats: = 4.0;
-					if objRng.genFloat() >= 0.5 {
-						repeats += 2.0;
+					if objRng.genFloat() <= 0.7 {
+						repeats += 4.0;
 					}
 					checker: = proc::Checkerboard( hit.uv, repeats );
 					texture -= checker * 0.15;
@@ -190,31 +194,33 @@ renderScan: (y:u16, in_ref scene:RayScene, in_ref renderCamera: Camera, image: I
 				NdotL:= Vec3::dot(hit.normal, lightDir);
 				diffuseIntensity: = std::clamp(NdotL, 0.0, 1.0) * diffuseI;
 
+				// specular
 				H: = ( lightDir + cameraRay.dir() ).normalised();
 				NdotH: = Vec3::dot(hit.normal, H);
 				specularIntensity: = std::pow(std::clamp(NdotH, 0.0, 1.0), 4.0) * specularI;
 
-
+				// smunch it together
 				lighting: = ambientI + diffuseIntensity + specularIntensity;
 				lighting *= texture;
 				lighting *= occlusion;
 
-
+				// monochrome == art
 				outColour.r += ( lighting * 1.15 );
-				outColour.g += ( lighting * 1.06 );
-				outColour.b += ( lighting * 1.09 );
+				outColour.g += ( lighting * 1.14 );
+				outColour.b += ( lighting * 1.13 );
 
 				_ = objRng;
 			}
 		}
 
+
 		// -----------------------------------------------------------------------------------------------------
 		// post-processing stage
 
 		// add alternate-scan darkening/brightening
-		postprocess: = 1.0;
+		postprocess: = 1.1;
 		if y % 2 == 0 {
-			postprocess = 0.8;
+			postprocess = 0.75;
 		}
 
 		// add vignette
@@ -223,23 +229,26 @@ renderScan: (y:u16, in_ref scene:RayScene, in_ref renderCamera: Camera, image: I
 		vig = std::pow(vig, 0.25);
 		postprocess *= vig;
 
-		
+
+		// -----------------------------------------------------------------------------------------------------
+		// final out to buffer
+
 		outColour.r *= perPixelDelta * postprocess;
 		outColour.g *= perPixelDelta * postprocess;
 		outColour.b *= perPixelDelta * postprocess;
-
 		image*.set(x, y, outColour);
 	}
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-run: ( move outputPath: std::filesystem::path ) -> int = {
+raytrace: ( move outputPath: std::filesystem::path ) -> int = {
 
 	blog::debug("WARNING! this is a debug build, it will be SLOW to render!");
 
 	blog::app("allocating framebuffer ...");
 	framebuffer: = cpp2::shared.new< BufferRGB<900, 480> >();
 
+	// deterministic RNG for scene setup
 	sceneRng: rng32 = (100);
 
 	// cook up something to render
@@ -265,7 +274,7 @@ run: ( move outputPath: std::filesystem::path ) -> int = {
 
 	// multithread dispatch of each scanline using std::execution
 	{
-		renderTimer: ScopedTimer = ("raytracing");
+		renderTimer: ScopedTimer = ("rendering");
 
 		scanlinesToDo: = framebuffer*.getHeight();
 		scanlinesRange: std::ranges::iota_view = (0.u16(), scanlinesToDo);	// range to iterate of 0..y
@@ -282,7 +291,7 @@ run: ( move outputPath: std::filesystem::path ) -> int = {
 
 				scansComplete: = scanlinesDone&$*++;
 				if ( scansComplete % 20 ) == 0 {
-					blog::app(" > rendering : {:3}%", std::round( unchecked_narrow<double>(scansComplete) * scanlinesPct$ * 100.0 ) );
+					blog::app(" -- tracing : {:3}%", std::round( unchecked_narrow<double>(scansComplete) * scanlinesPct$ * 100.0 ) );
 				}
 			});
 	}

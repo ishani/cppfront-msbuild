@@ -105,10 +105,9 @@ public:
   virtual ~IBuffer() noexcept;
 };
 
-using IColourBufferPtr = std::shared_ptr<IBuffer<ColourF>>;
-
 template <cpp2::u16 width, cpp2::u16 height>
 class BufferRGB : public IBuffer<ColourF> {
+
   // implement IBuffer
 
 public:
@@ -155,6 +154,8 @@ public:
 public:
   auto operator=(BufferRGB const &) -> void = delete;
 };
+
+using IColourBufferPtr = std::shared_ptr<IBuffer<ColourF>>;
 
 [[nodiscard]] auto TonemapACES(cpp2::impl::in<double> t) -> cpp2::u8
 {

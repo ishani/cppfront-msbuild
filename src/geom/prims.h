@@ -228,9 +228,10 @@ Plane::Plane(Vec3 const &normal, cpp2::impl::in<double> distance)
       hit.normal = m_normal;
 
       auto planeBasis{GetTangentBasisFrisvad(m_normal)};
-      hit.uv.x = Vec3::dot(planeBasis.R0, hit.pos + Vec3(100.0, 0, 100.0));
-      hit.uv.y =
-          Vec3::dot(cpp2::move(planeBasis).R1, hit.pos + Vec3(100.0, 0, 100.0));
+      hit.uv.x = Vec3::dot(CPP2_UFCS(row0)(planeBasis),
+                           hit.pos + Vec3(100.0, 0, 100.0));
+      hit.uv.y = Vec3::dot(CPP2_UFCS(row1)(cpp2::move(planeBasis)),
+                           hit.pos + Vec3(100.0, 0, 100.0));
     }
 
     return true;

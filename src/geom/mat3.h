@@ -14,14 +14,23 @@ class Mat3x3;
 
 class Mat3x3 {
 
-public:
-  Vec3 R0{};
+private:
+  Vec3 m_R0{};
+
+private:
+  Vec3 m_R1{};
+
+private:
+  Vec3 m_R2{};
 
 public:
-  Vec3 R1{};
+  [[nodiscard]] auto row0() const & -> Vec3;
 
 public:
-  Vec3 R2{};
+  [[nodiscard]] auto row1() const & -> Vec3;
+
+public:
+  [[nodiscard]] auto row2() const & -> Vec3;
 
 public:
   Mat3x3(Vec3 const &a, Vec3 const &b, Vec3 const &c);
@@ -45,38 +54,48 @@ public:
   explicit Mat3x3();
 };
 
+[[nodiscard]] auto Mat3x3::row0() const & -> Vec3 { return m_R0; }
+
+[[nodiscard]] auto Mat3x3::row1() const & -> Vec3 { return m_R1; }
+
+[[nodiscard]] auto Mat3x3::row2() const & -> Vec3 { return m_R2; }
+
 Mat3x3::Mat3x3(Vec3 const &a, Vec3 const &b, Vec3 const &c)
-    : R0{a}, R1{b}, R2{c}
+    : m_R0{a}, m_R1{b}, m_R2{c}
 {
 }
 
 [[nodiscard]] auto Mat3x3::transform(Vec3 const &vec) const & -> Vec3
 {
-  return Vec3(vec.x * R0.x + vec.y * R1.x + vec.z * R2.x,
-              vec.x * R0.y + vec.y * R1.y + vec.z * R2.y,
-              vec.x * R0.z + vec.y * R1.z + vec.z * R2.z);
+  return Vec3(vec.x * m_R0.x + vec.y * m_R1.x + vec.z * m_R2.x,
+              vec.x * m_R0.y + vec.y * m_R1.y + vec.z * m_R2.y,
+              vec.x * m_R0.z + vec.y * m_R1.z + vec.z * m_R2.z);
 }
 
-Mat3x3::Mat3x3(Mat3x3 const &that) : R0{that.R0}, R1{that.R1}, R2{that.R2} {}
+Mat3x3::Mat3x3(Mat3x3 const &that)
+    : m_R0{that.m_R0}, m_R1{that.m_R1}, m_R2{that.m_R2}
+{
+}
 
 auto Mat3x3::operator=(Mat3x3 const &that) -> Mat3x3 &
 {
-  R0 = that.R0;
-  R1 = that.R1;
-  R2 = that.R2;
+  m_R0 = that.m_R0;
+  m_R1 = that.m_R1;
+  m_R2 = that.m_R2;
   return *this;
 }
 
 Mat3x3::Mat3x3(Mat3x3 &&that) noexcept
-    : R0{std::move(that).R0}, R1{std::move(that).R1}, R2{std::move(that).R2}
+    : m_R0{std::move(that).m_R0}, m_R1{std::move(that).m_R1},
+      m_R2{std::move(that).m_R2}
 {
 }
 
 auto Mat3x3::operator=(Mat3x3 &&that) noexcept -> Mat3x3 &
 {
-  R0 = std::move(that).R0;
-  R1 = std::move(that).R1;
-  R2 = std::move(that).R2;
+  m_R0 = std::move(that).m_R0;
+  m_R1 = std::move(that).m_R1;
+  m_R2 = std::move(that).m_R2;
   return *this;
 }
 

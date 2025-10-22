@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <PropertyPageSchema Include="$(MSBuildThisFileDirectory)$(MSBuildThisFileName).xml" />
+    <AvailableItemName Include="cpp2">
+      <Targets>_cpp2</Targets>
+    </AvailableItemName>
+  </ItemGroup>
+
+  <!-- blunt force replacement of cpp2 extensions with their generated outputs; written into tlog -->
+  <Target Name="ProduceOutputFilePathToMatchCppfront" BeforeTargets="_cpp2">
+    <ItemGroup>
+      <cpp2>
+        <GeneratedCpfFile>%(RelativeDir)%(Filename)$([System.String]::Copy('%(Extension)').Replace('.cpp2', '.cpp').Replace('.h2', '.h'))</GeneratedCpfFile>
+      </cpp2>
+    </ItemGroup>
+    <!-- <Message Importance="High" Text="Extension filtered '@(cpp2)' -> '%(cpp2.GeneratedCpfFile)'" /> -->
+  </Target>
+
+  <UsingTask
+    TaskName="cpp2"
+    TaskFactory="XamlTaskFactory"
+    AssemblyName="Microsoft.Build.Tasks.v4.0">
+    <Task>$(MSBuildThisFileDirectory)$(MSBuildThisFileName).xml</Task>
+  </UsingTask>
+
+  <Target
+    Name="_cpp2"
+    BeforeTargets="$(cpp2BeforeTargets)"
+    AfterTargets="$(cpp2AfterTargets)"
+    Condition="'@(cpp2)' != ''"
+    DependsOnTargets="$(cpp2DependsOn)"
+    Outputs="%(cpp2.GeneratedCpfFile)"
+    Inputs="%(cpp2.Identity);%(cpp2.AdditionalDependencies);$(MSBuildProjectFile)">
+
+    <ItemGroup
+      Condition="'@(SelectedFiles)' != ''">
+      <cpp2
+        Remove="@(cpp2)"
+        Condition="'%(Identity)' != '@(SelectedFiles)'" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <cpp2_tlog
+        Include="%(cpp2.GeneratedCpfFile)"
+        Condition="'%(cpp2.GeneratedCpfFile)' != '' and '%(cpp2.ExcludedFromBuild)' != 'true'">
+        <Source>%(Fullpath)</Source>
+      </cpp2_tlog>
+    </ItemGroup>
+
+    <Message
+      Importance="High"
+      Text="%(cpp2.ExecutionDescription)" />
+
+    <WriteLinesToFile
+      Condition="'@(cpp2_tlog)' != '' and '%(cpp2_tlog.ExcludedFromBuild)' != 'true'"
+      File="$(TLogLocation)cpp2.write.1.tlog"
+      Lines="^%(cpp2_tlog.Source);@(cpp2_tlog-&gt;'%(Fullpath)')" />
+
+    <WriteLinesToFile
+      Condition="'@(cpp2_tlog)' != '' and '%(cpp2_tlog.ExcludedFromBuild)' != 'true'"
+      File="$(TLogLocation)cpp2.read.1.tlog"
+      Lines="^%(cpp2_tlog.Source)" />
+
+    <cpp2
+      Condition="'@(cpp2)' != '' and '%(cpp2.ExcludedFromBuild)' != 'true'"
+      
+      StandardOutputImportance="High"
+      StandardErrorImportance="High"
+      EchoOff="true"
+
+
+      FormatColonErrors="%(cpp2.FormatColonErrors)"
+      StdHandling="%(cpp2.StdHandling)"
+      PureCpp2="%(cpp2.PureCpp2)"
+      EmitCleanCpp1="%(cpp2.EmitCleanCpp1)"
+      Verbosity="%(cpp2.Verbosity)"
+      DisableCppEH="%(cpp2.DisableCppEH)"
+      DisableCppRTTI="%(cpp2.DisableCppRTTI)"
+
+      DispatchToolLocation="%(cpp2.DispatchToolLocation)"
+
+      CommandLineTemplate="%(cpp2.CommandLineTemplate)"
+      AdditionalOptions="%(cpp2.AdditionalOptions)"
+      Inputs="%(cpp2.Filename)%(cpp2.Extension)"
+      />
+  </Target>
+
+</Project>

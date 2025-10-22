@@ -1,0 +1,33 @@
+#include "vec3.h2"
+#include "ray.h2"
+
+IntersectionPrim: @enum type =
+{
+	Unknown;
+	Plane;
+	Sphere;
+}
+
+IntersectionQuery: @enum type =
+{
+	DistanceOnly;
+	Full;
+}
+
+Intersection: @struct type = {
+	pos: Vec3 = ();
+	normal: Vec3 = ();
+	dist: double = std::numeric_limits<double>::max();
+	uv: Vec2 = ();
+	query: IntersectionQuery = IntersectionQuery::Full;
+	prim: IntersectionPrim = IntersectionPrim::Unknown;
+
+	fromDist: ( inout this, in_ref r:Ray, t: double ) = {
+		pos = r.origin() + ( r.dir() * t );
+		dist = t;
+	}
+}
+
+IIntersectable: @interface type = {
+	intersect: ( this, in_ref r:Ray, inout hit: Intersection ) -> bool;
+}

@@ -1,0 +1,22 @@
+#include "geom/vec3.h2"
+
+Mat3x3: @basic_value type = {
+
+	public R0: Vec3 = ();
+	public R1: Vec3 = ();
+	public R2: Vec3 = ();
+
+	operator=: (out this, in_ref a:Vec3, in_ref b:Vec3, in_ref c:Vec3) = {
+		R0 = a;
+		R1 = b;
+		R2 = c;
+	}
+
+	transform: (this, in_ref vec:Vec3) -> Vec3 = {
+		return Vec3(
+			vec.x * R0.x + vec.y * R1.x + vec.z * R2.x,
+			vec.x * R0.y + vec.y * R1.y + vec.z * R2.y,
+			vec.x * R0.z + vec.y * R1.z + vec.z * R2.z
+		);
+	}
+}

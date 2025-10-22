@@ -1,0 +1,6 @@
+---
+BreakBeforeBraces: WebKit
+Cpp11BracedListStyle: true
+EmptyLineBeforeAccessModifier: LogicalBlock
+Language: Cpp
+SeparateDefinitionBlocks: Always

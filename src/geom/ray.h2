@@ -1,0 +1,128 @@
+#include "vec3.h2"
+#include "vec2.h2"
+#include "mat3.h2"
+#include "isect.h2"
+
+#include "math/angle.h2"
+
+Ray: @basic_value type = {
+	m_origin: Vec3 = ();
+	m_dir: Vec3 = ();
+
+	origin: (this) -> Vec3 = m_origin;
+	dir: (this) -> Vec3 = m_dir;
+
+	operator=: (out this, in_ref origin:Vec3, in_ref dir:Vec3 ) = {
+		m_origin = origin;
+		m_dir = dir;
+	}
+}
+
+
+Camera: @basic_value type = {
+
+	m_origin: Vec3 = ();
+	m_target: Vec3 = ();
+	
+	m_pdX: Vec3 = ();
+	m_pdY: Vec3 = ();
+	m_pdCenter: Vec3 = ();
+
+	origin: (this) -> Vec3 = m_origin;
+	target: (this) -> Vec3 = m_target;
+
+	public upVector: Vec3 == (0, 1, 0);
+
+	operator=: (out this, in_ref origin:Vec3, in_ref target:Vec3, frameWidth: u16, frameHeight: u16, fov: Angle ) = {
+
+		width: = unchecked_narrow<double>(frameWidth);
+		height: = unchecked_narrow<double>(frameHeight);
+		ratio: = height / width;
+
+		m_origin = origin;
+		m_target = target;
+
+		camDir: = m_target - m_origin;
+		camDist: = camDir.length();
+		
+		m_pdX = Vec3::cross( camDir, upVector ).normalised();
+		m_pdY = Vec3::cross( m_pdX, camDir ).normalised();
+
+		FOV: = -0.5 * fov.radians();
+		fX: = 2.0 * std::tanf(FOV) / width;
+		fY: = 2.0 * std::tanf(FOV * ratio) / height;
+
+		m_pdX *= camDist * fX;
+		m_pdY *= camDist * fY;
+
+		m_pdCenter = camDir - ( m_pdX * (width * 0.5) ) - ( m_pdY * (height * 0.5) );
+	}
+
+	generateRayAtPixelFrac:(this, x: double, y: double) -> Ray = {
+		xV: = Vec3( x ) * m_pdX + m_pdCenter;
+		yV: = Vec3( y ) * m_pdY + xV;
+
+		return Ray( m_origin, yV.normalised() );
+	}
+
+	generateRayAtPixel:(this, x: u16, y: u16) -> Ray = {
+		xD: = unchecked_narrow<double>(x);
+		yD: = unchecked_narrow<double>(y);
+
+		return generateRayAtPixelFrac( xD, yD );
+	}
+}
+
+
+
+// [Frisvad 2012, "Building an Orthonormal Basis from a 3D Unit Vector Without Normalization"]
+GetTangentBasisFrisvad: (TangentZ:Vec3) -> Mat3x3 = {
+
+	TangentX: Vec3 = ();
+	TangentY: Vec3 = ();
+
+	if (TangentZ.z < -0.9999999)
+	{
+		TangentX = Vec3(0, -1, 0);
+		TangentY = Vec3(-1, 0, 0);
+	}
+	else
+	{
+		A: = 1.0 / (1.0 + TangentZ.z);
+		B: = -TangentZ.x * TangentZ.y * A;
+		TangentX = Vec3(1.0 - TangentZ.x * TangentZ.x * A, B, -TangentZ.x);
+		TangentY = Vec3(B, 1.0 - TangentZ.y * TangentZ.y * A, -TangentZ.y);
+	}
+
+	return Mat3x3( TangentX, TangentY, TangentZ );
+}
+
+// generate a random vector in a hemisphere aligned to the input normal
+RandomHemisphere: ( in_ref normal: Vec3, inout rng: rng32) -> Vec3 = {
+
+	randX: = rng.genFloat();
+	randY: = rng.genFloat();
+
+	basis: = GetTangentBasisFrisvad(normal);
+	hemiUp: = Vec3(0, 0, 1);
+
+	uu: = Vec3::cross( hemiUp, Vec3(1.0, 0.0, 0.0) );
+	vv: = Vec3::cross( uu, hemiUp );
+	ra: = std::sqrt(randY);
+
+	// could turn this into a big LUT to save hammering sin/cos
+	rx: = ra * std::cos(twoPi * randX);
+	ry: = ra * std::sin(twoPi * randX);
+	rz: = std::sqrt(1.0 - randY);
+
+	hemiDir:  = ( uu * rx ) + ( vv * ry ) + ( hemiUp * rz );
+	basisDir: = basis.transform( hemiDir.normalised() );
+
+	return basisDir;
+}
+
+
+// {fmt} output shim
+std::string format_as(const Vec3& inst) {
+  return inst.format();
+}

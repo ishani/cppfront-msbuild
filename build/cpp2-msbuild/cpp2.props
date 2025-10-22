@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup
+    Condition="'$(cpp2BeforeTargets)' == '' and '$(cpp2AfterTargets)' == '' and '$(ConfigurationType)' != 'Makefile'">
+    <cpp2BeforeTargets>ClCompile</cpp2BeforeTargets>
+    <cpp2AfterTargets>CustomBuild</cpp2AfterTargets>
+  </PropertyGroup>
+  <PropertyGroup>
+    <cpp2DependsOn Condition="'$(ConfigurationType)' != 'Makefile'">_SelectedFiles;$(cpp2DependsOn)</cpp2DependsOn>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <cpp2>
+      <CommandLineTemplate>[DispatchToolLocation]  --reldir %(RelativeDir) --file [Inputs] --style InheritParentConfig --cpf -emit-cppfront-info [AllOptions] [AdditionalOptions]</CommandLineTemplate>
+      <ExecutionDescription>cppfront : %(RelativeDir)%(Filename)%(Extension)</ExecutionDescription>
+    </cpp2>
+  </ItemDefinitionGroup>
+</Project>

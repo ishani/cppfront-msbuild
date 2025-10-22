@@ -1,0 +1,29 @@
+degreesToRadians: (degrees:double) == degrees * 0.017453292519943295769236907684;
+radiansToDegrees: (radians:double) == radians * 57.29577951308232087679815481410;
+
+pi: double == 3.141592653589793238462643;
+twoPi: double == 6.283185307179586476925286;
+recpPi: double == 1.0 / pi;
+recpTwoPi: double == 1.0 / twoPi;
+
+Angle: @value type = {
+	m_degrees: float = ();
+	m_radians: float = ();
+	
+	degrees: (this) -> float = m_degrees;
+	radians: (this) -> float = m_radians;
+
+	fromDegrees: (deg: float) -> Angle = {
+		result: Angle = ();
+		result.m_degrees = deg;
+		result.m_radians = degreesToRadians(deg);
+		return result;
+	}
+
+	fromRadians: (rad: float) -> Angle = {
+		result: Angle = ();
+		result.m_degrees = radiansToDegrees(rad);
+		result.m_radians = rad;
+		return result;
+	}
+}

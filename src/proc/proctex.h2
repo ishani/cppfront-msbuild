@@ -1,0 +1,76 @@
+
+// glsl-style mod() that handles -ve values
+mod: (a: double, b: double) -> double == {
+	if a >= 0 {
+		return std::fmod(a,b);
+	} else { 
+		ret: = std::fmod(-a,b); 
+		if ret == 0 { 
+			return ret;
+		} else {
+			return b - ret;
+		}
+	}
+}
+
+frac: ( val:double ) -> double = {
+	return val - std::trunc(val);
+}
+
+smoothstep: (edge0: double, edge1: double, x: double) -> double = {
+	// scale, and clamp x to 0..1 range
+	v: = std::clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+
+	return v * v * (3.0f - 2.0f * v);
+}
+
+hash3: ( in_ref p:Vec2 ) -> Vec3 = {
+
+	q: = Vec3(	Vec2::dot( p, Vec2(127.1,311.7 )),
+				Vec2::dot( p, Vec2(269.5,183.3 )),
+				Vec2::dot( p, Vec2(419.2,371.9 )) );
+
+	x: = frac( std::sin(q.x) * 43758.5453 );
+	y: = frac( std::sin(q.y) * 43758.5453 );
+	z: = frac( std::sin(q.z) * 43758.5453 );
+
+	return Vec3(x, y, z);
+}
+
+
+// some simple procedural texture functions, given some input UV coordinates
+proc: namespace = {
+
+Checkerboard: ( in_ref uv:Vec2, checkSize: double ) -> double = {
+	fmodResult: = mod( std::floor(checkSize * uv.x) + floor(checkSize * uv.y), 2.0 );
+	if fmodResult > 0 {
+		return 1.0;
+	}
+	return 0.0;
+}
+
+// https://www.shadertoy.com/view/Xd23Dh
+Voronoise: ( in_ref p:Vec2, u:double, v:double ) -> double = {
+	k: double = 1.0 + 63.0 * std::pow( 1.0-v, 6.0 );
+
+	i: = Vec2( std::floor(p.x), std::floor(p.y) );
+	f: = Vec2( frac(p.x), frac(p.y) );
+
+	a: = Vec2( 0.0, 0.0 );
+
+	for (-2) ..< 2 do (y) {
+	for (-2) ..< 2 do (x) {
+		g: = Vec2( unchecked_narrow<double>(x), unchecked_narrow<double>(y) );
+		o: = hash3( i + g ) * Vec3( u, u, 1.0 );
+
+		d: = g - f + Vec2( o.x, o.y );
+
+		w: = std::pow( 1.0 - smoothstep( 0.0, 1.414, d.length() ), k );
+		a += Vec2( o.z*w, w );
+	}
+	}
+	if a.y == 0.0 { return 0.0; }
+	return std::clamp( a.x / a.y, 0.0, 1.0 );
+}
+
+} // proc: namespace

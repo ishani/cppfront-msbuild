@@ -1,0 +1,111 @@
+#include "mat3.h2"
+#include "isect.h2"
+
+
+Sphere: @basic_value type = {
+	this: IIntersectable = ();
+
+	m_origin: Vec3 = ();
+	m_align: Vec3 = ();
+	m_radius: double = 0;
+
+	private m_alignBasis: Mat3x3 = ();
+	private m_radiusSqr: double = 0;
+
+	origin: (this) -> Vec3 = m_origin;
+	radius: (this) -> double = m_radius;
+
+	operator=: (out this, in_ref origin:Vec3, radius:double, in_ref align:Vec3 ) = {
+		m_origin = origin;
+		m_radius = radius;
+		m_align = align;
+
+		m_alignBasis = GetTangentBasisFrisvad( m_align );
+		m_radiusSqr = m_radius * m_radius;
+	}
+
+	// ray intersection; as per Ericson's RTCD book (realtimecollisiondetection.net)
+	intersect: ( final this, in_ref r:Ray, inout hit: Intersection ) -> bool = {
+		m: = r.origin() - origin();
+		b: = Vec3::dot( m, r.dir() );
+		c: = Vec3::dot( m, m ) - m_radiusSqr;
+
+		// exit if r’s origin outside s (c > 0) and r pointing away from s (b > 0)
+		if c > 0.0 && b > 0.0 {
+			return false;
+		}
+
+		discr: double = b * b - c;
+
+		// a negative discriminant corresponds to ray missing sphere
+		if discr < 0.0 {
+			return false;
+		}
+
+		// write outputs for a successful hit
+		hit.prim = IntersectionPrim::Sphere;
+
+		// emit distance along ray; if it is negative, the ray 
+		// started inside sphere so clamp it to zero
+		hit.dist	= -b - std::sqrt( discr );
+		hit.dist	= std::max( hit.dist, 0.0 );
+
+		if hit.query == IntersectionQuery::Full {
+			// compute position and normals
+			hit.fromDist( r, hit.dist );
+			hit.normal	= ( hit.pos - origin() ).normalised();
+
+			// rotate the normal around the alignment given at construction time and use the result to produce a UV wrap
+			uvNormal: = m_alignBasis.transform(hit.normal);
+			hit.uv		= (
+				( (std::atan2(uvNormal.x, -uvNormal.z) + pi ) * recpTwoPi ),
+				std::acos(uvNormal.y) * recpPi
+			);
+
+		}
+
+		return true;
+	}
+}
+
+
+Plane: @basic_value type = {
+	this: IIntersectable = ();
+
+	m_normal: Vec3 = ();
+	m_dist: double = ();
+
+	normal: (this) -> Vec3 = m_normal;
+	distance: (this) -> double = m_dist;
+
+	operator=: (out this, in_ref normal:Vec3, distance:double ) = {
+		m_normal = normal;
+		m_dist = distance;
+	}
+
+	intersect: ( final this, in_ref r:Ray, inout hit: Intersection ) -> bool = {
+		d: = Vec3::dot( m_normal, r.dir() );
+		if d == 0 {
+			return false;
+		}
+
+		hit.dist = -( Vec3::dot( m_normal, r.origin() ) - m_dist ) / d;
+
+		if hit.dist > 0 {
+			hit.prim	= IntersectionPrim::Plane;
+
+			if hit.query == IntersectionQuery::Full {
+				hit.fromDist( r, hit.dist );
+				hit.normal	= m_normal;
+
+				planeBasis: = GetTangentBasisFrisvad( m_normal );
+				hit.uv.x	= Vec3::dot( planeBasis.R0, hit.pos + Vec3(100.0, 0, 100.0) );
+				hit.uv.y	= Vec3::dot( planeBasis.R1, hit.pos + Vec3(100.0, 0, 100.0) );
+			}
+
+			return true;
+		}
+
+		return false;
+	}
+}

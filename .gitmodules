@@ -1,0 +1,9 @@
+[submodule "ext/fmt"]
+	path = ext/fmt
+	url = https://github.com/fmtlib/fmt.git
+[submodule "ext/cppfront"]
+	path = ext/cppfront
+	url = https://github.com/ishani/cppfront
+[submodule "ext/premake-bin"]
+	path = ext/premake-bin
+	url = https://github.com/ishani/premake-bin

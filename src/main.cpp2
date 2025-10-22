@@ -1,0 +1,297 @@
+#include "util/blog.h"
+#include <execution>
+
+#include "geom/vec3.h2"
+#include "geom/vec2.h2"
+#include "geom/ray.h2"
+#include "geom/prims.h2"
+
+#include "image/buffer.h2"
+#include "image/tga.h2"
+
+#include "math/rng.h2"
+
+#include "proc/proctex.h2"
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+contractViolationHandler: (copy msg: * const char, copy where: std::source_location) = {
+	blog::error( "Contract Violation | {}", where.function_name() );
+	blog::error( "{}({}) : {}", where.file_name(), where.line(), msg );
+	__debugbreak();
+	exit(-1);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+main: () -> int = {
+
+	cpp2::default.set_handler(contractViolationHandler&);
+	cpp2::bounds_safety.set_handler(contractViolationHandler&);
+
+	blog::configureTerminal();
+
+	return run("result.tga");
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// a container for primitives to trace rays against; just a big brute-force list, no subdivision system
+RayScene: type = {
+
+	private objects : std::vector< std::unique_ptr<IIntersectable> > = ();
+
+	// bolt in a new primitive
+	addPrim: <T: type, Args...: type> (inout this, forward args...: Args) = {
+		objects.emplace_back( new<T>(args...) );
+	}
+
+	// fetch a unique_ptr* at the given index
+	primAt: (this, objectIndex: u32) = objects[objectIndex]&;
+
+	// trace for any hit, no further data (eg. plain shadow rays) with an optional distance limit
+	hit: ( this, in_ref ray:Ray, limit: double = std::numeric_limits<double>::max() ) -> bool = {
+		hit: Intersection = ();
+		hit.query = IntersectionQuery::DistanceOnly;	// tell prims to only bother computing distance on hit
+
+		for objects do (obj) {
+			if obj*.intersect( ray, hit ) {
+				if hit.dist < limit {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	// trace to find nearest object; returns true and populates the nearestHit & nearestObject if anything was found
+	trace: ( this, in_ref ray:Ray, inout nearestHit: Intersection, inout nearestObject: u32 ) -> bool = {
+
+		nearestHit = ();
+		nearestObject = -1;
+
+		hit: Intersection = ();
+
+		objectIndex: u32 = 0u;
+		for objects next objectIndex++ do (obj) {
+			if obj*.intersect( ray, hit ) {
+				if hit.dist < nearestHit.dist {
+					nearestHit = hit;
+					nearestObject = objectIndex;
+				}
+			}
+		}
+		return nearestObject != -1;
+	}
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// render a single scanline at [y] into the given image buffer
+renderScan: (y:u16, in_ref scene:RayScene, in_ref renderCamera: Camera, image: IColourBufferPtr ) = {
+
+	hit: Intersection = ();
+	obj: u32 = ();
+
+	rng: rng32 = ();
+
+	// pick a number of occlusion samples; increasing will smooth the ambient shadowing but it increases
+	// the time spent per pixel
+	occlusionSamples: == 64;
+	occlusionDelta: == 1.0 / unchecked_narrow<double>(occlusionSamples);
+
+	// how many sub-samples per-pixel
+	perPixelSamples: == 32;
+	perPixelDelta: == 1.0 / unchecked_narrow<double>(perPixelSamples);
+	assert( perPixelSamples >= 1 );
+
+	// walk the scanline
+	for 0.u16() ..< image*.getWidth() do (x) {
+
+		xD: = unchecked_narrow<double>(x);
+		yD: = unchecked_narrow<double>(y);
+		imageUV: = image*.getUVatXY(x, y);
+
+		outColour: ColourF = ();
+
+		for 0 ..< perPixelSamples do (pps) {
+		
+			xDOff: = -0.9 + ( rng.genGauss() * 1.8 );
+			yDOff: = -0.9 + ( rng.genGauss() * 1.8 );
+			if pps == 0 {
+				xDOff = 0;
+				yDOff = 0;
+			}
+
+			// generate a primary ray for this pixel
+			cameraRay: = renderCamera.generateRayAtPixelFrac( xD + xDOff, yD + yDOff );
+
+			// go find the nearest thing in the scene
+			if scene.trace( cameraRay, hit, obj ) {
+
+				// create object-local rng using its primitive index
+				objRng: rng32 = (obj + 100);
+
+				// a shadow test position needs shifting a tiny fraction away from the surface to
+				// avoid collision with the original object
+				shadowTestPos: = hit.pos + (hit.normal * 1e-5);
+
+				// goofy little ambient occlusion routine; cast N random shadow samples out in a hemisphere
+				// aligned to the surface normal. we split the group into testing for near-by objects (which darken more)
+				// and a general, infinite test (which gives a nice soft fall-off)
+				occlusion: = 1.0;
+				for 0 ..< occlusionSamples do (os) {
+					hemi: = RandomHemisphere( hit.normal, rng );
+					shadowRay: Ray = ( shadowTestPos, hemi );
+					
+					if os < ( occlusionSamples >> 2 ) {
+						if scene.hit( shadowRay, 0.75 ) {
+							occlusion -= occlusionDelta * 1.5;
+						}
+					} else {
+						if scene.hit( shadowRay ) {
+							occlusion -= occlusionDelta;
+						}
+					}
+				}
+				occlusion = std::max( occlusion, 0.0 );
+
+				ambientI: = 0.4;
+
+				// -----------------------------------------------------------------------------------------------------
+				// dream up some material properties
+				diffuseI: = 1.0;
+				specularI: = 2.0;
+				texture: = 1.0;
+				
+				// choose some per-prim material fx
+				if hit.prim == IntersectionPrim::Sphere {
+
+					repeats: = 4.0;
+					if objRng.genFloat() >= 0.5 {
+						repeats += 2.0;
+					}
+					checker: = proc::Checkerboard( hit.uv, repeats );
+					texture -= checker * 0.15;
+
+					// texture += proc::Voronoise( hit.uv * 32.0, 0.2, 0.2 ) * checker * 0.2;
+				}
+				if hit.prim == IntersectionPrim::Plane {
+					specularI = 0.0;
+
+					impact: = Vec3(-2.0,  0.5, -1.1) - hit.pos;
+					impactDist: = impact.length();
+
+					impactFalloff: = 1.0 - std::min( impactDist * 0.4, 1.0 );
+					texture -= std::sin( impactDist * ( 16.0 + ( impactFalloff * 20.0 ) ) ) * ( 0.15 * impactFalloff );
+				}
+
+				// add a point light for some contrast
+				lightDir: = (Vec3(0.5, 3.0, -2.0) - hit.pos).normalised();
+
+				// diffuse contribution
+				NdotL:= Vec3::dot(hit.normal, lightDir);
+				diffuseIntensity: = std::clamp(NdotL, 0.0, 1.0) * diffuseI;
+
+				H: = ( lightDir + cameraRay.dir() ).normalised();
+				NdotH: = Vec3::dot(hit.normal, H);
+				specularIntensity: = std::pow(std::clamp(NdotH, 0.0, 1.0), 4.0) * specularI;
+
+
+				lighting: = ambientI + diffuseIntensity + specularIntensity;
+				lighting *= texture;
+				lighting *= occlusion;
+
+
+				outColour.r += ( lighting * 1.15 );
+				outColour.g += ( lighting * 1.06 );
+				outColour.b += ( lighting * 1.09 );
+
+				_ = objRng;
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+		// post-processing stage
+
+		// add alternate-scan darkening/brightening
+		postprocess: = 1.0;
+		if y % 2 == 0 {
+			postprocess = 0.8;
+		}
+
+		// add vignette
+		vigUV: = Vec2( 1.0 - imageUV.y, 1.0 - imageUV.x ) * imageUV;
+		vig: = vigUV.x * vigUV.y * 15.0;
+		vig = std::pow(vig, 0.25);
+		postprocess *= vig;
+
+		
+		outColour.r *= perPixelDelta * postprocess;
+		outColour.g *= perPixelDelta * postprocess;
+		outColour.b *= perPixelDelta * postprocess;
+
+		image*.set(x, y, outColour);
+	}
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+run: ( move outputPath: std::filesystem::path ) -> int = {
+
+	blog::debug("WARNING! this is a debug build, it will be SLOW to render!");
+
+	blog::app("allocating framebuffer ...");
+	framebuffer: = cpp2::shared.new< BufferRGB<900, 480> >();
+
+	sceneRng: rng32 = (100);
+
+	// cook up something to render
+	scene: RayScene = ();
+	scene.addPrim<Sphere>( Vec3( 0.0,  0.5,  0.1),  0.5, RandomNormal( sceneRng ) );
+	scene.addPrim<Sphere>( Vec3(-1.2,  0.8, -0.3),  0.5, RandomNormal( sceneRng ) );
+	scene.addPrim<Sphere>( Vec3(-1.8,  0.5, -1.1),  0.3, RandomNormal( sceneRng ) );
+	scene.addPrim<Sphere>( Vec3(-1.2,  0.3, -2.1),  0.2, RandomNormal( sceneRng ) );
+	scene.addPrim<Sphere>( Vec3(-0.4, -0.4, -1.4),  0.8, RandomNormal( sceneRng ) );
+	scene.addPrim<Plane>(  Vec3( 0.0,  1.0,  0.0),  0.0 );
+	scene.addPrim<Plane>(  Vec3( 1.0,  0.0,  0.0), -2.0 );
+
+	_ = sceneRng;
+
+	// .. and a place to render it from
+	renderCamera: Camera = (
+		Vec3( 1.0,  1.5, -3.5),
+		Vec3(-2.0,  0.3,  0.0),
+		framebuffer*.getWidth(),
+		framebuffer*.getHeight(),
+		Angle::fromDegrees(70.0)
+	);
+
+	// multithread dispatch of each scanline using std::execution
+	{
+		renderTimer: ScopedTimer = ("raytracing");
+
+		scanlinesToDo: = framebuffer*.getHeight();
+		scanlinesRange: std::ranges::iota_view = (0.u16(), scanlinesToDo);	// range to iterate of 0..y
+		scanlinesDone: std::atomic_uint32_t = ();
+
+		scanlinesPct: = 1.0 / unchecked_narrow<double>(scanlinesToDo);		// used to publish completion percentage
+
+		std::for_each(
+			std::execution::par_unseq,
+			scanlinesRange.begin(),
+			scanlinesRange.end(),
+			:(y) = {
+				renderScan(y, scene&$*, renderCamera$, framebuffer$);
+
+				scansComplete: = scanlinesDone&$*++;
+				if ( scansComplete % 20 ) == 0 {
+					blog::app(" > rendering : {:3}%", std::round( unchecked_narrow<double>(scansComplete) * scanlinesPct$ * 100.0 ) );
+				}
+			});
+	}
+
+	if WriteBufferAsTGA( framebuffer, outputPath ) == false {
+		blog::error("failed to write out result '{}'", outputPath.string() );
+	} else {
+		blog::app("complete!");
+	}
+
+	return 0;
+}

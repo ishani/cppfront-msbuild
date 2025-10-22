@@ -1,0 +1,27 @@
+#include "blog.h"
+
+OnScopeExit: <TCallback:type> type
+	requires std::is_invocable_v<TCallback> = {
+
+	operator=: (out this, func: TCallback ) = { m_callOnExit = func; }
+	operator=: (move this) = { m_callOnExit(); }
+
+	private m_callOnExit: TCallback = ();
+}
+
+ScopedTimer: type = {
+	TTimeClock : type == std::chrono::high_resolution_clock;
+	TTimePoint : type == std::chrono::time_point< TTimeClock >;
+
+	operator=: (out this, context: std::string_view ) = { 
+		m_context = context; 
+	}
+
+	operator=: (move this) = {
+		duration: = std::chrono::duration_cast< std::chrono::seconds >( TTimeClock::now() - m_instant );
+		blog::app("{} took {}", m_context, duration);
+	}
+
+	private m_context: std::string = ();
+	private m_instant: TTimePoint = TTimeClock::now();
+}

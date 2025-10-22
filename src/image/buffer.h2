@@ -1,0 +1,81 @@
+#include "geom/vec2.h2"
+
+TonemapACES: (t: double) -> u8 =
+{
+	a: double == 2.51;
+	b: double == 0.03;
+	c: double == 2.43;
+	d: double == 0.59;
+	e: double == 0.14;
+	
+	clip: = std::clamp((t*(a*t+b)) / (t*(c*t+d)+e), 0.0, 1.0);
+
+	return unchecked_narrow<u8>( clip * 255.0 );
+}
+
+ColourF: @struct type = 
+{
+	r: double = 0;
+	g: double = 0;
+	b: double = 0;
+
+	tonemap: (this) -> ColourU8 = {
+		return ColourU8(
+			TonemapACES( std::max( r, 0.0 ) ),
+			TonemapACES( std::max( g, 0.0 ) ),
+			TonemapACES( std::max( b, 0.0 ) )
+		);
+	}
+}
+
+ColourU8: @struct type = 
+{
+	r: u8 = 0;
+	g: u8 = 0;
+	b: u8 = 0;
+}
+
+IBuffer: @interface <T: type> type = {
+	getWidth: (this) -> u16;
+	getHeight: (this) -> u16;
+	getUVatXY: (this, x: u16, y: u16) -> Vec2;
+	get: (this, x: u16, y: u16) -> forward T;
+	set: (inout this, x: u16, y: u16, in_ref pixel: T);
+}
+
+IColourBufferPtr : type == std::shared_ptr< IBuffer<ColourF> >;
+
+BufferRGB: <width: u16, height: u16> type =
+{
+	// implement IBuffer
+	this: IBuffer<ColourF>;
+	getWidth: (final this) -> u16 = width;
+	getHeight: (final this) -> u16 = height;
+
+	private recp: Vec2 == (1.0 / width, 1.0 / height);
+
+	getUVatXY: (final this, x: u16, y: u16) -> Vec2 = {
+		xy2: Vec2 = ( unchecked_narrow<double>(x), unchecked_narrow<double>(y) );
+		return xy2 * recp;
+	}
+
+	getAspectRatio: (this) -> double == unchecked_narrow<double>(width) / unchecked_narrow<double>(height);
+
+	// fixed storage of RGB data as floats
+	private data: std::array<ColourF, width * height> = ();
+
+	// get offset into [data] for the given pixel coordinate
+	private offset: (this, x: u16, y: u16) -> size_t == (y * width) + x;
+
+	get: (final this, x: u16, y: u16) -> forward ColourF
+		pre<bounds_safety>(x < width, "x=(x)$, larger than width=(width)$")
+		pre<bounds_safety>(y < height, "y=(y)$, larger than height=(height)$") = {
+		return unchecked_subscript(data, offset(x, y));
+	}
+	set: (final inout this, x: u16, y: u16, in_ref pixel : ColourF)
+		pre<bounds_safety>(x < width, "x=(x)$, larger than width=(width)$")
+		pre<bounds_safety>(y < height, "y=(y)$, larger than height=(height)$") = {
+		unchecked_subscript(data, offset(x, y)) = pixel;
+	}
+}
+

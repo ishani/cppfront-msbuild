@@ -1,0 +1,70 @@
+#include "util/scope.h2"
+
+// ---------------------------------------------------------------------------------------------------------------------
+// absolutely bare-bones TGA format support for writing out an uncompressed 24-bit BGR image
+
+#pragma pack(push,1)
+
+detail: namespace = {
+
+TGAImageType: @enum<u8> type =
+{
+	NoImage				: = 0;
+	UncompressedRgb		: = 2;
+}
+
+TGAHeader: @value type = {
+	idLength			: u8 = 0;
+	ColourFMapType		: u8 = 0;
+	imageType			: TGAImageType = TGAImageType::UncompressedRgb;
+	ColourFMapOrigin	: u16 = 0;
+	ColourFMapLength	: u16 = 0;
+	ColourFMapDepth		: u8  = 0;
+	imageXOrigin		: u16 = 0;
+	imageYOrigin		: u16 = 0;
+	imageWidth			: u16 = 0;
+	imageHeight			: u16 = 0;
+	imageBitsPP			: u8  = 24;
+	imageDesc			: u8  = 1 << 5;	// set origin to be top-left corner
+
+	operator=: (out this, width:u16, height:u16) = {
+		imageWidth = width;
+		imageHeight = height;
+	}
+
+	getWidth: (this) -> u16 = imageWidth;
+	getHeight: (this) -> u16 = imageHeight;
+}
+
+} // detail: namespace
+
+#pragma pack(pop)
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+WriteBufferAsTGA: (image: IColourBufferPtr, filename: std::filesystem::path) -> bool = {
+	ofs: std::ofstream = (filename, std::ios::binary);
+	if ofs.fail() {
+		return false;
+	}
+
+	// automatically close stream on scope exit
+	onExit: OnScopeExit = ( :() = { ofs&$*.close(); } );
+
+	// write out header
+	fileHeader: const detail::TGAHeader = (image*.getWidth(), image*.getHeight());
+	_ = ofs.write( unchecked_cast<*const char>( unchecked_cast<*const void>(fileHeader&) ), sizeof(fileHeader) );
+
+	// and then each pixel, in BGR order
+	for 0.u16() ..< fileHeader.getHeight() do (y) {
+		for 0.u16() ..< fileHeader.getWidth() do (x) {
+
+			pixelU8: = image*.get(x, y).tonemap();
+
+			_ = ofs.put( pixelU8.b );
+			_ = ofs.put( pixelU8.g );
+			_ = ofs.put( pixelU8.r );
+		}
+	}
+	return true;
+}
